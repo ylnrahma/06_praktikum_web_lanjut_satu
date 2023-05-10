@@ -5,7 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Mahasiswa;
 use Illuminate\Http\Request;
 use App\Models\Kelas;
+use App\Models\MataKuliah;
+use App\Models\MahasiswaMataKuliah;
 use Illuminate\Support\Facades\Auth;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Storage;
 
 class MahasiswaController extends Controller
 {
@@ -42,6 +46,9 @@ class MahasiswaController extends Controller
      */
     public function store(Request $request)
     {
+        if ($request->file('image')){
+            $image_name = $request->file('image')->store('images', 'public');
+        }
     //melakukan validasi data
         $request->validate([
             'Nim' => 'required',
@@ -57,6 +64,7 @@ class MahasiswaController extends Controller
         $mahasiswas= new Mahasiswa;
         $mahasiswas->nim=$request->get('Nim');
         $mahasiswas->nama=$request->get('Nama');
+        $mahasiswas->foto=$image_name;
         $mahasiswas->jurusan=$request->get('Jurusan');
         $mahasiswas->no_handphone=$request->get('No_Handphone');
         $mahasiswas->email=$request->get('Email');
@@ -119,11 +127,19 @@ class MahasiswaController extends Controller
                 'Email' => 'required',
                 'Tanggal_lahir' => 'required',
             ]);
+            //fungsi update data inputan
+            $mahasiswas = Mahasiswa::with('kelas')->where('Nim', $Nim)->first();
+
+            if ($mahasiswas->Foto && file_exists(storage_path('app/public/' .$mahasiswas->Foto))){
+                Storage::delete('public/' .$mahasiswas->Foto);
+            }
+            $image_name = $request->file('image')->store('images', 'public');
 
            //fungsi eloquent untuk menambah data
            $mahasiswas= new Mahasiswa;
            $mahasiswas->nim=$request->get('Nim');
            $mahasiswas->nama=$request->get('Nama');
+           $mahasiswas->foto=$image_name;
            $mahasiswas->jurusan=$request->get('Jurusan');
            $mahasiswas->no_handphone=$request->get('No_Handphone');
            $mahasiswas->email=$request->get('Email');
@@ -160,4 +176,22 @@ class MahasiswaController extends Controller
         $mahasiswas = Mahasiswa::where('Nama', 'like', "%" . $keyword . "%")->paginate(5);
         return view('mahasiswas.index', compact('mahasiswas'))->with('i', (request()->input('page', 1) - 1) * 5);
     }
+
+    public function nilai($Nim)
+    {
+        //menampilkan detail data dengan menemukan berdasarkan Nim Mahasiswa untuk diedit
+        $Mahasiswa = Mahasiswa::find($Nim);
+        $Matakuliah = Matakuliah::all();
+        $MahasiswaMataKuliah = MahasiswaMataKuliah::where('mahasiswa_id', '=', $Nim)->get();
+        return view('mahasiswas.nilai', ['Mahasiswa' => $Mahasiswa], ['MahasiswaMataKuliah' => $MahasiswaMataKuliah], compact('MahasiswaMataKuliah'));
+    }
+
+    public function cetak_pdf($Nim){
+        $Mahasiswa = Mahasiswa::find($Nim);
+        $Matakuliah = Matakuliah::all();
+        $MahasiswaMataKuliah = MahasiswaMataKuliah::Where('mahasiswa_id','=',$Nim)->get();
+        $pdf = PDF::loadView('mahasiswas.nilai_pdf', compact('Mahasiswa', 'MahasiswaMataKuliah'));
+        return $pdf->stream();
+    }
+
 };
